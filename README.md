@@ -53,6 +53,42 @@ Production: `npm run build && npm start` (serves `dist/` and the Trakt endpoints
 
 Checks: `npm run typecheck`, `npm test`.
 
+## Raspberry Pi 5 on the TV (single device)
+
+Everything runs on the Pi: the Node server, the app in full-screen Chromium, and mpv for video.
+Nothing is hosted elsewhere and there is no database — settings and progress live in Chromium's
+profile on the Pi, and video streams go straight from your debrid service to mpv.
+
+```
+TV remote ──HDMI-CEC──► Pi ─┬─ Chromium (kiosk, the UI)
+                            ├─ Node server ─► Trakt sign-in, mpv control (localhost only)
+                            └─ mpv (full-screen video, hardware HEVC)
+```
+
+**Requirements:** Pi 5, Raspberry Pi OS Bookworm 64-bit *with desktop*, TV on the Pi's HDMI 0 port.
+
+1. `git clone` the repo on the Pi, then run `./scripts/pi/install.sh`.
+   The first run creates `.env` and stops. Fill it in (TMDB token, Trakt keys, and optionally
+   `STREMIO_EMAIL` / `STREMIO_PASSWORD` and `MEDIAHUB_ADDONS` so nobody types with the remote), then run the script again.
+2. `sudo reboot`. The Pi logs into the desktop, starts the server, and opens Media Hub full-screen.
+
+| Remote key | Browsing | Playing (mpv) |
+| --- | --- | --- |
+| Arrows | Move between cards | ← → seek 10 s, ↑ ↓ seek 60 s |
+| OK | Open / activate | Play–pause; "play now" on the next-episode prompt |
+| Back | Go back | Exit; "watch credits" on the next-episode prompt |
+| 0–9 | — | Rate on Trakt when asked (0 = 10) |
+| Blue / Red / Green | — | Sources / subtitles / audio track |
+| Skip forward | — | Next episode |
+
+Notes:
+- mpv is only controllable from the Pi itself (the player endpoints reject other machines). A phone or laptop
+  opening `http://<pi-ip>:8787` gets the normal browser player.
+- Stream ranking on the Pi prefers HEVC (hardware-decoded) and avoids 4K H.264, AV1 and Dolby-Vision-only files.
+- Logs: `~/.cache/media-hub/server.log`. Test the remote with `sudo ir-keytable -t`.
+- If the UI looks small on a 4K TV, set `MEDIAHUB_SCALE=2` in `.env`.
+- The mpv playback and CEC remote paths have not yet been verified on real hardware.
+
 ## Notes & limitations
 
 - Browsers can't decode every file a debrid service returns (HEVC, DTS/TrueHD, some MKVs). Ranking prefers
