@@ -28,7 +28,8 @@ export function Watch() {
   const { type = 'movie', id: rawId = '', videoId: rawVideo = '' } = useParams();
   const id = decodeURIComponent(rawId);
   const videoId = decodeURIComponent(rawVideo);
-  const { addons, addonsLoading, settings } = useApp();
+  const { addons, addonsLoading, settings, backend } = useApp();
+  const rankOpts = { preferredQuality: settings.preferredQuality, backend };
   const navigate = useNavigate();
   const location = useLocation();
   const navState = (location.state ?? {}) as { bingeGroup?: string; fromStart?: boolean };
@@ -53,7 +54,7 @@ export function Watch() {
     const bingeGroup = navState.bingeGroup ?? getProgress(videoId)?.bingeGroup;
     const choose = (list: SourcedStream[], final: boolean) => {
       if (done) return;
-      const ranked = rankStreams(list, settings.preferredQuality);
+      const ranked = rankStreams(list, rankOpts);
       setStreams(ranked);
       // Take a binge-group match the moment it arrives; otherwise wait for every addon (or the timeout).
       const same = bingeGroup && pickAutoplay(ranked, bingeGroup);
@@ -73,7 +74,7 @@ export function Watch() {
     }).then((all) => {
       clearTimeout(timeout);
       latest = all;
-      if (done) setStreams(rankStreams(all, settings.preferredQuality));
+      if (done) setStreams(rankStreams(all, rankOpts));
       else choose(all, true);
     });
     return () => {
@@ -81,7 +82,7 @@ export function Watch() {
       clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addons, addonsLoading, type, videoId]);
+  }, [addons, addonsLoading, type, videoId, backend]);
 
   useEffect(() => {
     const p = getProgress(videoId);
@@ -163,6 +164,11 @@ export function Watch() {
     return found ? (await moreLikeThis(found.id, type)).slice(0, 8).map(fromTmdb) : [];
   }, [id, type]);
 
+  const openSources = () => {
+    setStartAt(lastTime.current);
+    setShowSources(true);
+  };
+
   const switchTo = (s: RankedStream) => {
     setStartAt(lastTime.current);
     setCurrent(s);
@@ -182,10 +188,15 @@ export function Watch() {
 
   return (
     <main className="watch">
-      {current?.url ? (
+      {/* On the TV, mpv covers the screen — close it while the Sources drawer is open, resume after. */}
+      {current?.url && backend === 'mpv' && showSources ? (
+        <div className="watch__loading" style={m?.background ? { backgroundImage: `url(${m.background})` } : undefined} />
+      ) : current?.url ? (
         <Player
           key={videoId}
           src={current.url}
+          backend={backend}
+          backdrop={video?.thumbnail ?? m?.background}
           title={title}
           subtitle={subtitle}
           startAt={startAt}
@@ -197,7 +208,7 @@ export function Watch() {
           offerShowRating={type === 'series'}
           onTime={onTime}
           onBack={() => navigate(`/title/${type}/${encodeURIComponent(id)}`)}
-          onOpenSources={() => setShowSources(true)}
+          onOpenSources={openSources}
           onError={onError}
           postPlay={
             recs.data?.length ? (
@@ -238,9 +249,11 @@ export function Watch() {
           <div className="sources__panel" onClick={(e) => e.stopPropagation()}>
             <div className="sources__head">
               <h3>Sources</h3>
-              <a className="pill pill--ghost" href={stremioDeepLink(type, id, videoId)}>Open in Stremio</a>
-              {current?.url && (
-                <a className="pill pill--ghost" href={`vlc://${current.url}`}>Open in VLC</a>
+              {backend === 'browser' && (
+                <>
+                  <a className="pill pill--ghost" href={stremioDeepLink(type, id, videoId)}>Open in Stremio</a>
+                  {current?.url && <a className="pill pill--ghost" href={`vlc://${current.url}`}>Open in VLC</a>}
+                </>
               )}
               {current && <button className="icon-btn" onClick={() => setShowSources(false)} aria-label="Close">✕</button>}
             </div>
@@ -252,6 +265,7 @@ export function Watch() {
                     className={`source ${s === current ? 'is-on' : ''}`}
                     disabled={!s.url}
                     onClick={() => switchTo(s)}
+                    data-autofocus={s === current || (!current && i === 0) ? '' : undefined}
                     title={s.url ? undefined : 'Torrent-only result — configure a debrid service in your addon'}
                   >
                     <span className="source__q">{s.label}</span>
@@ -263,7 +277,10 @@ export function Watch() {
                       {s.cached && <span className="tag tag--ok">Cached</span>}
                       {!s.cached && s.debrid && <span className="tag">Uncached</span>}
                       {!s.debrid && <span className="tag">P2P</span>}
-                      {s.debrid && !s.browserFriendly && <span className="tag tag--warn">May need external player</span>}
+                      {s.debrid && !s.deviceFriendly && (
+                        <span className="tag tag--warn">{backend === 'mpv' ? 'May stutter on this device' : 'May need external player'}</span>
+                      )}
+                      {s.hwDecoded && <span className="tag tag--ok">HW decode</span>}
                       {s.sizeGb && <span className="tag">{s.sizeGb.toFixed(1)} GB</span>}
                     </span>
                   </button>

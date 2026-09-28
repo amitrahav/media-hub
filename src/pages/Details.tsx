@@ -95,7 +95,7 @@ export function Details() {
           <MetaLine meta={m} />
           <p className="hero__overview">{m.description ?? t?.found.overview}</p>
           <div className="hero__actions">
-            {target && <button className="btn btn--primary" onClick={() => play(target.videoId)}>▶ {target.label}</button>}
+            {target && <button className="btn btn--primary" onClick={() => play(target.videoId)} data-autofocus>▶ {target.label}</button>}
             {resumeEntry && type !== 'series' && (
               <button className="btn" onClick={() => navigate(`/watch/${type}/${encodeURIComponent(id)}/${encodeURIComponent(m.id)}`, { state: { fromStart: true } })}>↺ From beginning</button>
             )}

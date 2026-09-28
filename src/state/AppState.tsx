@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { defaultAddonUrls, fetchManifest, stremioAddonCollection } from '../lib/stremio';
 import { load, save } from '../lib/storage';
 import type { Addon } from '../lib/types';
+import { mpvAvailable, type PlayerBackend } from '../lib/remoteMedia';
 
 export interface Settings {
   preferredQuality: number;
@@ -9,7 +10,14 @@ export interface Settings {
   autoplayPreviews: boolean;
   introSting: boolean;
   askRating: boolean;
+  /** `auto` uses mpv when the app runs on the same device as the server (Raspberry Pi on the TV). */
+  playerBackend: 'auto' | PlayerBackend;
+  /** 10-foot UI: remote / arrow-key navigation, bigger focus states, lighter previews. */
+  tvMode: boolean;
 }
+
+// Opening the app with ?tv=1 (the Pi kiosk launcher does) switches TV mode on for good.
+const tvFromUrl = new URLSearchParams(location.search).get('tv') === '1';
 
 const defaultSettings: Settings = {
   preferredQuality: 1080,
@@ -17,6 +25,8 @@ const defaultSettings: Settings = {
   autoplayPreviews: true,
   introSting: true,
   askRating: true,
+  playerBackend: 'auto',
+  tvMode: false,
 };
 
 interface StremioAuth {
@@ -34,6 +44,10 @@ interface AppState {
   reloadAddons: () => void;
   settings: Settings;
   updateSettings: (patch: Partial<Settings>) => void;
+  /** mpv is installed on this device and controllable from this browser. */
+  mpvReady: boolean;
+  /** The backend the player will actually use. */
+  backend: PlayerBackend;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -41,7 +55,37 @@ const Ctx = createContext<AppState | null>(null);
 export function AppStateProvider({ children }: { children: ReactNode }) {
   const [stremio, setStremioState] = useState<StremioAuth | null>(() => load('stremio', null));
   const [extraAddonUrls, setExtraState] = useState<string[]>(() => load('addons', []));
-  const [settings, setSettings] = useState<Settings>(() => ({ ...defaultSettings, ...load('settings', {}) }));
+  const [settings, setSettings] = useState<Settings>(() => {
+    const s = { ...defaultSettings, ...load<Partial<Settings>>('settings', {}) };
+    if (tvFromUrl && !s.tvMode) {
+      s.tvMode = true;
+      save('settings', s);
+    }
+    return s;
+  });
+  const [mpvReady, setMpvReady] = useState(false);
+  useEffect(() => {
+    void mpvAvailable().then(setMpvReady);
+  }, []);
+
+  // On the TV, sign-in details can come from the server's .env (see README → Raspberry Pi).
+  useEffect(() => {
+    fetch('/api/bootstrap')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { stremio: StremioAuth | null; addonUrls: string[] } | null) => {
+        if (!b) return;
+        if (b.stremio && !load('stremio', null)) setStremio(b.stremio);
+        const missing = b.addonUrls.filter((u) => !load<string[]>('addons', []).includes(u));
+        if (missing.length) setExtraAddonUrls([...load<string[]>('addons', []), ...missing]);
+      })
+      .catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    document.documentElement.classList.toggle('tv', settings.tvMode);
+  }, [settings.tvMode]);
+  const backend: PlayerBackend =
+    settings.playerBackend === 'browser' || !mpvReady ? 'browser' : 'mpv';
   const [addons, setAddons] = useState<Addon[]>([]);
   const [addonsLoading, setLoading] = useState(true);
   const [reloadTick, setReloadTick] = useState(0);
@@ -99,8 +143,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       reloadAddons: () => setReloadTick((n) => n + 1),
       settings,
       updateSettings,
+      mpvReady,
+      backend,
     }),
-    [addons, addonsLoading, stremio, setStremio, extraAddonUrls, setExtraAddonUrls, settings, updateSettings],
+    [addons, addonsLoading, stremio, setStremio, extraAddonUrls, setExtraAddonUrls, settings, updateSettings, mpvReady, backend],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

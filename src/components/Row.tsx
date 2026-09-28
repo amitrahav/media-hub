@@ -33,6 +33,8 @@ function Card({ tile, variant }: { tile: Tile; variant: 'poster' | 'landscape' }
   const [preview, setPreview] = useState<{ key?: string; backdrop?: string } | null>(null);
 
   const enter = () => {
+    // TV: the focused card scales up instead (a pop-over would cover the neighbouring rows).
+    if (settings.tvMode) return;
     timer.current = setTimeout(async () => {
       setPreview({ backdrop: tile.background });
       if (!settings.autoplayPreviews || !tmdbEnabled()) return;

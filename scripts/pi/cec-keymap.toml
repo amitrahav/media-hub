@@ -1,0 +1,34 @@
+# HDMI-CEC "User Control" codes → keys that Chromium and mpv understand.
+# (The kernel's default CEC map sends e.g. KEY_OK / KEY_EXIT / KEY_NUMERIC_1, which browsers ignore.)
+[[protocols]]
+name = "media-hub-cec"
+protocol = "cec"
+[protocols.scancodes]
+0x00 = "KEY_ENTER"         # Select / OK
+0x01 = "KEY_UP"
+0x02 = "KEY_DOWN"
+0x03 = "KEY_LEFT"
+0x04 = "KEY_RIGHT"
+0x0d = "KEY_BACKSPACE"     # Exit / Back
+0x20 = "KEY_0"
+0x21 = "KEY_1"
+0x22 = "KEY_2"
+0x23 = "KEY_3"
+0x24 = "KEY_4"
+0x25 = "KEY_5"
+0x26 = "KEY_6"
+0x27 = "KEY_7"
+0x28 = "KEY_8"
+0x29 = "KEY_9"
+0x44 = "KEY_PLAY"
+0x45 = "KEY_STOP"
+0x46 = "KEY_PAUSE"
+0x48 = "KEY_REWIND"
+0x49 = "KEY_FASTFORWARD"
+0x4b = "KEY_NEXTSONG"      # Skip forward → next episode
+0x4c = "KEY_PREVIOUSSONG"
+0x61 = "KEY_PLAYPAUSE"
+0x71 = "KEY_F1"            # Blue   → sources
+0x72 = "KEY_F2"            # Red    → subtitles
+0x73 = "KEY_F3"            # Green  → audio track
+0x74 = "KEY_F4"            # Yellow

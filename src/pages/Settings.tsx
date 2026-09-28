@@ -5,7 +5,7 @@ import { getTraktToken, pollDeviceAuth, setTraktToken, startDeviceAuth, traktEna
 import { tmdbEnabled } from '../lib/tmdb';
 
 export function SettingsPage() {
-  const { stremio, setStremio, addons, extraAddonUrls, setExtraAddonUrls, reloadAddons, settings, updateSettings } = useApp();
+  const { stremio, setStremio, addons, extraAddonUrls, setExtraAddonUrls, reloadAddons, settings, updateSettings, mpvReady, backend } = useApp();
   return (
     <main className="page page--padded settings">
       <h1>Settings</h1>
@@ -65,6 +65,19 @@ export function SettingsPage() {
             <option value={720}>720p</option>
           </select>
         </label>
+        <label className="toggle">
+          Player
+          <select value={settings.playerBackend} onChange={(e) => updateSettings({ playerBackend: e.target.value as typeof settings.playerBackend })}>
+            <option value="auto">Automatic</option>
+            <option value="mpv" disabled={!mpvReady}>mpv on this device (TV / Raspberry Pi)</option>
+            <option value="browser">Browser</option>
+          </select>
+        </label>
+        <p className="muted small">
+          Using <strong>{backend === 'mpv' ? 'mpv — hardware HEVC, MKV, DTS/TrueHD all play' : 'the browser player'}</strong>
+          {!mpvReady && ' · mpv is used automatically when this app runs on the device the server runs on and mpv is installed'}
+        </p>
+        <label className="toggle"><input type="checkbox" checked={settings.tvMode} onChange={(e) => updateSettings({ tvMode: e.target.checked })} /> TV mode (remote / arrow-key navigation)</label>
         {!tmdbEnabled() && <p className="warn">Set VITE_TMDB_TOKEN to enable trailers, More Like This and cast pages.</p>}
       </section>
     </main>

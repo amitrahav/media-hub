@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom';
+import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { focusInitial, installSpatialNav, watchFocus } from './lib/spatialNav';
 import { IntroSting } from './components/IntroSting';
 import { useApp } from './state/AppState';
 import { Home } from './pages/Home';
@@ -16,6 +17,25 @@ export function App() {
   const inPlayer = location.pathname.startsWith('/watch');
 
   useEffect(() => window.scrollTo(0, 0), [location.pathname]);
+
+  // TV remote / D-pad navigation.
+  const navigate = useNavigate();
+  const atHome = location.pathname === '/';
+  useEffect(() => {
+    if (!settings.tvMode) return;
+    const off = installSpatialNav(() => !atHome && navigate(-1));
+    const unwatch = watchFocus();
+    return () => {
+      off();
+      unwatch();
+    };
+  }, [settings.tvMode, navigate, atHome]);
+  useEffect(() => {
+    if (!settings.tvMode) return;
+    (document.activeElement as HTMLElement | null)?.blur();
+    const t = setTimeout(focusInitial, 400);
+    return () => clearTimeout(t);
+  }, [settings.tvMode, location.pathname]);
 
   const endIntro = () => {
     sessionStorage.setItem('mh:intro', '1');

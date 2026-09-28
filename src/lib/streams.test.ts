@@ -38,11 +38,28 @@ describe('rankStreams', () => {
         s('[RD+] Torrentio\n1080p', 'Movie.1080p.WEB.x264.mp4 💾 3 GB'),
         { name: 'Torrentio\n1080p', title: 'p2p', infoHash: 'abc', addonName: 'Torrentio', addonUrl: 'x' },
       ],
-      1080,
+      { preferredQuality: 1080 },
     );
     expect(ranked[0].name).toBe('[RD+] Torrentio\n1080p');
-    expect(ranked[0].browserFriendly).toBe(true);
+    expect(ranked[0].deviceFriendly).toBe(true);
     expect(ranked.at(-1)?.debrid).toBe(false);
+  });
+
+  it('on a Raspberry Pi (mpv) prefers hardware-decoded HEVC and avoids 4K H.264 / AV1 / DV-only', () => {
+    const ranked = rankStreams(
+      [
+        s('[RD+] T\n2160p', 'Movie.2160p.WEB.x264.mkv 💾 20 GB'),
+        s('[RD+] T\n1080p', 'Movie.1080p.WEB.AV1.mkv 💾 2 GB'),
+        s('[RD+] T\n2160p', 'Movie.2160p.DV.HEVC.mkv 💾 15 GB'),
+        s('[RD+] T\n1080p', 'Movie.1080p.BluRay.x265.DTS.mkv 💾 6 GB'),
+        s('[RD+] T\n1080p', 'Movie.1080p.WEB.x264.mkv 💾 3 GB'),
+      ],
+      { preferredQuality: 1080, backend: 'mpv' },
+    );
+    expect(ranked[0].title).toContain('x265.DTS.mkv');
+    expect(ranked[1].title).toContain('1080p.WEB.x264');
+    const bad = ranked.filter((r) => !r.deviceFriendly).map((r) => r.title);
+    expect(bad).toEqual(expect.arrayContaining([expect.stringContaining('AV1'), expect.stringContaining('2160p.WEB.x264'), expect.stringContaining('DV.HEVC')]));
   });
 
   it('keeps the same binge group for the next episode', () => {

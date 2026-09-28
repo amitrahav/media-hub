@@ -1,10 +1,13 @@
 import type { SourcedStream, Video } from './types';
+import type { PlayerBackend } from './remoteMedia';
 
 export interface RankedStream extends SourcedStream {
   quality: number; // vertical resolution
   cached: boolean; // instantly available on the debrid service
   debrid: boolean; // resolves to an HTTP url (debrid / direct), not a raw torrent
-  browserFriendly: boolean; // likely to play in a <video> element
+  /** Likely to play smoothly on the active backend (browser <video>, or mpv on a Raspberry Pi 5). */
+  deviceFriendly: boolean;
+  hwDecoded: boolean; // HEVC on the Pi 5's hardware decoder
   sizeGb?: number;
   label: string;
 }
@@ -38,26 +41,42 @@ export function cacheState(t: string): 'cached' | 'uncached' | 'unknown' {
   return 'unknown';
 }
 
-export function rankStreams(streams: SourcedStream[], preferredQuality = 1080): RankedStream[] {
+export interface RankOptions {
+  preferredQuality?: number;
+  backend?: PlayerBackend;
+}
+
+/**
+ * Browser: needs H.264/VP9/AV1 + AAC/Opus in MP4/WebM — no HEVC, DTS/TrueHD or MKV.
+ * mpv on a Raspberry Pi 5: plays any container/audio; HEVC is hardware-decoded (up to 4K), H.264 is
+ * CPU-decoded (fine to 1080p), AV1 has no hardware path, and Dolby Vision-only (profile 5) files
+ * render with wrong colours.
+ */
+export function rankStreams(streams: SourcedStream[], { preferredQuality = 1080, backend = 'browser' }: RankOptions = {}): RankedStream[] {
   return streams
     .filter((s) => s.url || s.infoHash || s.externalUrl)
     .map((s) => {
       const t = text(s);
       const quality = parseQuality(t);
       const debrid = Boolean(s.url);
-      const hevc = /hevc|x265|h\.?265|\bav1\b/i.test(t);
+      const hevc = /hevc|x265|h\.?265/i.test(t);
+      const av1 = /\bav1\b/i.test(t);
       const heavyAudio = /\btruehd\b|\bdts\b|atmos/i.test(t);
       const container = /\.mkv\b|\bmkv\b/i.test(t) ? 'mkv' : /\.mp4\b|\bmp4\b/i.test(t) ? 'mp4' : '';
-      const browserFriendly =
-        debrid && !s.behaviorHints?.notWebReady && !hevc && !heavyAudio && container !== 'mkv';
+      const dvOnly = /\bDV\b|dolby.?vision/i.test(t) && !/\bHDR/i.test(t);
+      const deviceFriendly =
+        backend === 'mpv'
+          ? debrid && !av1 && !dvOnly && (hevc || quality <= 1080)
+          : debrid && !s.behaviorHints?.notWebReady && !hevc && !heavyAudio && container !== 'mkv';
       return {
         ...s,
         quality,
         debrid,
         cached: debrid && cacheState(t) !== 'uncached',
-        browserFriendly,
+        deviceFriendly,
+        hwDecoded: backend === 'mpv' && hevc,
         sizeGb: parseSizeGb(t),
-        label: `${quality ? (quality === 2160 ? '4K' : `${quality}p`) : 'SD'}${hevc ? ' · HEVC' : ''}`,
+        label: `${quality ? (quality === 2160 ? '4K' : `${quality}p`) : 'SD'}${hevc ? ' · HEVC' : av1 ? ' · AV1' : ''}`,
       };
     })
     .sort((a, b) => score(b, preferredQuality) - score(a, preferredQuality));
@@ -67,7 +86,9 @@ function score(s: RankedStream, preferred: number): number {
   let n = 0;
   if (s.debrid) n += 1000;
   if (s.cached) n += 500;
-  if (s.browserFriendly) n += 200;
+  if (s.deviceFriendly) n += 200;
+  // Hardware decoding keeps the Pi cool and frame-perfect.
+  if (s.hwDecoded) n += 40;
   // Closest to the preferred resolution wins, overshooting is penalised less than undershooting.
   const diff = s.quality - preferred;
   n += diff >= 0 ? 100 - diff / 20 : 100 + diff / 5;

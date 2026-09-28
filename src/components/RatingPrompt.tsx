@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { rate, type TraktItem } from '../lib/trakt';
 
 // Trakt's own labels for its 1–10 scale.
@@ -10,11 +10,14 @@ interface Props {
   /** For the last episode of a series, also offer to rate the whole show. */
   offerShow?: boolean;
   compact?: boolean;
+  /** Put the remote's focus on the hearts (TV). */
+  autoFocus?: boolean;
   onDone?: () => void;
 }
 
 /** Post-watch "How was it?" — sends a 1–10 rating to Trakt. */
-export function RatingPrompt({ item, title, offerShow, compact, onDone }: Props) {
+export function RatingPrompt({ item, title, offerShow, compact, autoFocus, onDone }: Props) {
+  const stars = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState(0);
   const [rating, setRating] = useState(0);
   const [target, setTarget] = useState<'item' | 'show'>('item');
@@ -32,6 +35,23 @@ export function RatingPrompt({ item, title, offerShow, compact, onDone }: Props)
     }
   };
 
+  // Number keys rate directly (remote-friendly): 1–9, 0 = 10.
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useEffect(() => {
+    if (state !== 'idle') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!/^\d$/.test(e.key) || (e.target as HTMLElement).closest('input, textarea')) return;
+      void submitRef.current(e.key === '0' ? 10 : Number(e.key));
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [state]);
+
+  useEffect(() => {
+    if (autoFocus) stars.current?.querySelectorAll('button')[7]?.focus();
+  }, [autoFocus]);
+
   const shown = hover || rating;
   return (
     <div className={`rating ${compact ? 'rating--compact' : ''}`}>
@@ -44,12 +64,13 @@ export function RatingPrompt({ item, title, offerShow, compact, onDone }: Props)
           <button className={target === 'show' ? 'is-on' : ''} onClick={() => setTarget('show')}>Whole series</button>
         </div>
       )}
-      <div className="rating__stars" onMouseLeave={() => setHover(0)}>
+      <div className="rating__stars" ref={stars} onMouseLeave={() => setHover(0)}>
         {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
           <button
             key={n}
             className={n <= shown ? 'is-on' : ''}
             onMouseEnter={() => setHover(n)}
+            onFocus={() => setHover(n)}
             onClick={() => submit(n)}
             disabled={state === 'saving' || state === 'saved'}
             aria-label={`${n} – ${LABELS[n]}`}

@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as player from './player.mjs';
 
 try {
   process.loadEnvFile?.(fileURLToPath(new URL('../.env', import.meta.url)));
@@ -77,16 +78,63 @@ async function serveStatic(req, res) {
   }
 }
 
-createServer(async (req, res) => {
-  const route = routes[`${req.method} ${req.url?.split('?')[0]}`];
-  if (!route) return serveStatic(req, res);
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    return res.writeHead(501, { 'Content-Type': 'application/json' }).end('{"error":"Trakt not configured"}');
+const isLocal = (req) => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress);
+const sendJson = (res, status, data) =>
+  res.writeHead(status, { 'Content-Type': 'application/json' }).end(JSON.stringify(data));
+
+// TV bootstrap: sign-in details from .env so nobody has to type an email/password with a remote.
+let stremioAuth = null;
+async function bootstrap() {
+  const { STREMIO_EMAIL: email, STREMIO_PASSWORD: password, MEDIAHUB_ADDONS = '' } = process.env;
+  if (email && password && !stremioAuth) {
+    const r = await fetch('https://api.strem.io/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'Login', email, password, facebook: false }),
+    }).then((x) => x.json());
+    if (r.result?.authKey) stremioAuth = { authKey: r.result.authKey, email: r.result.user?.email ?? email };
+    else console.warn('Stremio login from .env failed:', r.error?.message ?? r);
   }
+  return {
+    stremio: stremioAuth,
+    addonUrls: MEDIAHUB_ADDONS.split(',').map((u) => u.trim()).filter(Boolean),
+  };
+}
+
+// Local mpv playback (TV mode). Only the browser running on this machine may drive it.
+async function playerRoute(req, res, path) {
+  if (path === '/api/player/status') return sendJson(res, 200, { available: player.mpvAvailable && isLocal(req) });
+  if (!isLocal(req)) return sendJson(res, 403, { error: 'Player control is only available on the device itself' });
+  if (!player.mpvAvailable) return sendJson(res, 501, { error: 'mpv is not installed' });
+  if (path === '/api/player/events' && req.method === 'GET') return player.subscribe(res);
+  if (req.method !== 'POST') return sendJson(res, 405, { error: 'POST only' });
+  const payload = await body(req);
+  if (path === '/api/player/play') return sendJson(res, 200, await player.play(payload));
+  if (path === '/api/player/command') {
+    player.command(payload.name, payload.value, payload.extra);
+    return sendJson(res, 200, { ok: true });
+  }
+  return sendJson(res, 404, { error: 'Unknown player route' });
+}
+
+createServer(async (req, res) => {
+  const path = req.url?.split('?')[0] ?? '/';
+  if (path === '/api/bootstrap') {
+    if (!isLocal(req)) return sendJson(res, 200, { stremio: null, addonUrls: [] });
+    return bootstrap().then((b) => sendJson(res, 200, b), (e) => sendJson(res, 502, { error: String(e) }));
+  }
+  if (path.startsWith('/api/player/')) {
+    return playerRoute(req, res, path).catch((e) => sendJson(res, 400, { error: String(e.message ?? e) }));
+  }
+  const route = routes[`${req.method} ${path}`];
+  if (!route) return serveStatic(req, res);
+  if (!CLIENT_ID || !CLIENT_SECRET) return sendJson(res, 501, { error: 'Trakt not configured' });
   try {
     const { status, text } = await route(req);
     res.writeHead(status, { 'Content-Type': 'application/json' }).end(text || '{}');
   } catch (e) {
-    res.writeHead(502, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: String(e) }));
+    sendJson(res, 502, { error: String(e) });
   }
-}).listen(PORT, () => console.log(`media-hub server on http://localhost:${PORT}`));
+}).listen(PORT, () =>
+  console.log(`media-hub server on http://localhost:${PORT}${player.mpvAvailable ? ' (mpv TV playback available)' : ''}`),
+);

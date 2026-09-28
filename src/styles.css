@@ -330,3 +330,45 @@ input, select { font: inherit; }
 .tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,.1); color: #ccc; }
 .tag--ok { background: rgba(48,209,88,.18); color: var(--ok); }
 .tag--warn { background: rgba(255,214,10,.14); color: var(--warn); }
+
+.small { font-size: 13px; }
+
+/* ---------- mpv (TV) playback: Chromium sits behind the mpv window ---------- */
+.player__tv { background: #000 center / cover no-repeat; }
+.player__tv-note {
+  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px;
+  padding: 0 var(--gutter) 10vh; background: linear-gradient(0deg, rgba(0,0,0,.85), rgba(0,0,0,.3));
+}
+.player__tv-note strong { font-size: clamp(28px, 3vw, 48px); }
+.player__tv-note span { color: #ddd; font-size: 20px; }
+.player__tv-note small { color: var(--muted); font-size: 16px; }
+.player--mpv .player__video { transition: none; }
+
+/* ---------- TV mode (10-foot UI, remote navigation) ---------- */
+html.tv { scroll-behavior: smooth; }
+html.tv :focus { outline: none; }
+html.tv :is(a, button, select, input, [tabindex="0"]):focus {
+  outline: 3px solid #fff; outline-offset: 3px; border-radius: 8px;
+}
+html.tv .btn:focus { background: #fff; color: #000; transform: scale(1.06); box-shadow: 0 8px 30px rgba(0,0,0,.5); }
+html.tv .pill:focus { transform: scale(1.06); }
+html.tv .row__arrow { display: none; }
+html.tv .row__track { padding-top: 18px; padding-bottom: 30px; }
+html.tv .card__link:focus {
+  transform: scale(1.1); z-index: 3; outline: 3px solid #fff; outline-offset: 0;
+  box-shadow: 0 14px 40px rgba(0,0,0,.7);
+}
+html.tv .card__link { transition: transform .2s ease, box-shadow .2s ease; }
+html.tv .grid__item:focus { outline: none; }
+html.tv .grid__item:focus img { transform: scale(1.06); box-shadow: 0 0 0 3px #fff; }
+html.tv .episode:focus { background: var(--bg-2); outline-offset: 0; }
+html.tv .episode:focus .episode__play { opacity: 1; }
+html.tv .cast__item:focus { outline: none; }
+html.tv .cast__item:focus img, html.tv .cast__item:focus .cast__ph { transform: scale(1.08); box-shadow: 0 0 0 4px #fff; }
+html.tv .rating__stars button:focus { outline: none; transform: scale(1.35); }
+html.tv .source:focus { outline: none; border-color: #fff; background: var(--bg-3); }
+html.tv .tabs button:focus { outline: none; color: var(--fg); border-color: #fff; }
+html.tv .nav a:focus { outline-offset: 6px; }
+html.tv .filmography a:focus { outline-offset: 4px; }
+html.tv .postplay__rec:focus { outline-offset: 0; }
+html.tv .postplay__rec:focus img { transform: scale(1.05); }

@@ -133,7 +133,7 @@ function Hero({ title, autoplay }: { title: TmdbTitle; autoplay: boolean }) {
         </div>
         <p className="hero__overview">{title.overview}</p>
         <div className="hero__actions">
-          <button className="btn btn--primary" onClick={() => navigate(href, { state: { autoplay: true } })}>▶ Play</button>
+          <button className="btn btn--primary" onClick={() => navigate(href, { state: { autoplay: true } })} data-autofocus>▶ Play</button>
           <button className="btn" onClick={() => navigate(href)}>ⓘ More Info</button>
         </div>
       </div>
